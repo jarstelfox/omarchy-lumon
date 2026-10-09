@@ -219,6 +219,12 @@ Item {
 
         Keys.onPressed: function(event) {
           root.wakeRequested()
+          // while the screensaver shows, the first key only wakes it: it doesn't go into the password
+          if (root.screensaverMode && !root.showField) {
+            root.reveal()
+            event.accepted = true
+            return
+          }
           root.reveal()
           if (event.key === Qt.Key_Escape || (event.modifiers & Qt.ControlModifier && event.key === Qt.Key_U)) {
             root.passwordTextEdited("")
