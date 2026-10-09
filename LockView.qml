@@ -38,9 +38,10 @@ Item {
     ? Border.surfaceSpec("lock", "border-error", Color.lock.borderError, root.outlineThickness, "border-alpha")
     : Border.surfaceSpec("lock", "border-active", Color.lock.borderActive, root.outlineThickness, "border-alpha")
 
-  // Screensaver mode: with the screensaver's text available, an idle lock screen shows it animating with no
-  // password box. Any key or pointer movement brings the box back over a blurred, dimmed animation; after
-  // idleSeconds with nothing typed it goes back. Without the text, the blurred wallpaper shows as before.
+  // Screensaver mode: with the screensaver's text available, an idle lock screen is a plain screensaver, the
+  // animation and nothing else. A key press or a click fades it into the usual lock screen (blurred wallpaper
+  // and password box); idleSeconds with nothing typed fades back. Moving the pointer alone doesn't wake it.
+  // Without the text, the usual lock screen shows as before.
   readonly property bool screensaverMode: root.loadBackground && saver.hasText
   readonly property int idleSeconds: 10
   property bool revealed: false
@@ -52,11 +53,6 @@ Item {
     idleTimer.restart()
   }
 
-  // a Connections, not onWakeRequested: Service.qml handles that signal on this view too, and both must run
-  Connections {
-    target: root
-    function onWakeRequested() { root.reveal() }
-  }
   onKeepRevealedChanged: if (!keepRevealed) idleTimer.restart()
 
   Timer {
@@ -119,7 +115,6 @@ Item {
 
     Image {
       id: wallpaper
-      visible: !root.screensaverMode
       anchors.fill: parent
       source: root.loadBackground ? root.fileUrl(root.backgroundPath) : ""
       fillMode: Image.PreserveAspectCrop
@@ -130,7 +125,6 @@ Item {
     }
 
     MultiEffect {
-      visible: !root.screensaverMode
       anchors.fill: wallpaper
       source: wallpaper
       autoPaddingEnabled: false
@@ -141,34 +135,26 @@ Item {
       contrast: -0.08
     }
 
-    ScreensaverText {
-      id: saver
-      anchors.fill: parent
-      running: root.loadBackground
-      visible: root.screensaverMode
-      // blurs as the password box comes up, and sharpens again as it goes
-      property real veiled: root.showField ? 1 : 0
-      Behavior on veiled { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
-      layer.enabled: veiled > 0
-      layer.effect: MultiEffect {
-        blurEnabled: true
-        blur: saver.veiled
-        blurMax: 48
-        autoPaddingEnabled: false
-      }
-    }
-
-    Rectangle {   // dims the animation behind the password box
-      visible: root.screensaverMode
+    // the screensaver covers the usual lock screen while idle, and fades out when someone wakes it
+    Rectangle {
+      id: screensaverLayer
       anchors.fill: parent
       color: Color.background
-      opacity: saver.veiled * 0.55
+      visible: opacity > 0
+      opacity: root.screensaverMode && !root.showField ? 1 : 0
+      Behavior on opacity { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
+
+      ScreensaverText {
+        id: saver
+        anchors.fill: parent
+        running: root.loadBackground
+      }
     }
 
     MouseArea {
       anchors.fill: parent
       hoverEnabled: true
-      onClicked: { root.wakeRequested(); root.forcePasswordFocus() }
+      onClicked: { root.wakeRequested(); root.reveal(); root.forcePasswordFocus() }
       onPositionChanged: root.wakeRequested()
     }
 
@@ -220,6 +206,7 @@ Item {
           if (!root.syncingPasswordText) root.passwordTextEdited(text)
           if (text.length > 0) {
             root.wakeRequested()
+            root.reveal()
           }
           if (text.length > 0 && root.failureMessage.length > 0) root.clearFailureRequested()
         }
@@ -232,6 +219,7 @@ Item {
 
         Keys.onPressed: function(event) {
           root.wakeRequested()
+          root.reveal()
           if (event.key === Qt.Key_Escape || (event.modifiers & Qt.ControlModifier && event.key === Qt.Key_U)) {
             root.passwordTextEdited("")
             event.accepted = true
