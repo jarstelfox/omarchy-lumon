@@ -133,6 +133,7 @@ Item {
 
     resetAuthenticationState()
     lockRequested = true
+    hidePointerWhileLocked()
     armBlankTimer()
     logEvent("lock-requested")
     queueSessionLock()
@@ -155,6 +156,7 @@ Item {
     resetAuthenticationState()
     idleBlankTimer.stop()
     sessionLock.locked = false
+    restorePointer()
     logEvent("unlocked")
     runWake()
   }
@@ -170,6 +172,42 @@ Item {
     idleBlankTimer.armedAt = Date.now()
     idleBlankTimer.restart()
   }
+
+  // Local change: the lock screen can't hide the pointer itself (no blank shape to ask Hyprland for), so while
+  // locked Hyprland hides it after 3 still seconds (cursor:inactive_timeout); unlocking puts the user's value
+  // back. A Hyprland reload while locked would also put it back, which only means the pointer shows.
+  property string savedPointerTimeout: ""
+
+  function hidePointerWhileLocked() {
+    if (pointerSaveProc.running) return
+    pointerSaveProc.running = true
+  }
+
+  function restorePointer() {
+    var value = Number(savedPointerTimeout)
+    if (savedPointerTimeout === "" || !isFinite(value)) return
+    savedPointerTimeout = ""
+    pointerSetProc.command = ["hyprctl", "eval", "hl.config({ cursor = { inactive_timeout = " + value + " } })"]
+    pointerSetProc.running = true
+  }
+
+  Process {
+    id: pointerSaveProc
+    command: ["hyprctl", "getoption", "cursor:inactive_timeout", "-j"]
+    stdout: StdioCollector {
+      onStreamFinished: {
+        var saved = ""
+        try { saved = String(JSON.parse(text).float) } catch (e) { saved = "0" }
+        // only the first lock saves; a second lock request keeps the value from before the first
+        if (root.savedPointerTimeout === "") root.savedPointerTimeout = saved
+        if (!root.lockRequested) return root.restorePointer()   // unlocked before this finished
+        pointerSetProc.command = ["hyprctl", "eval", "hl.config({ cursor = { inactive_timeout = 3 } })"]
+        pointerSetProc.running = true
+      }
+    }
+  }
+
+  Process { id: pointerSetProc }
 
   FileView {
     id: screensaverFile
