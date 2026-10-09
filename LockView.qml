@@ -38,6 +38,33 @@ Item {
     ? Border.surfaceSpec("lock", "border-error", Color.lock.borderError, root.outlineThickness, "border-alpha")
     : Border.surfaceSpec("lock", "border-active", Color.lock.borderActive, root.outlineThickness, "border-alpha")
 
+  // Screensaver mode: with the screensaver's text available, an idle lock screen shows it animating with no
+  // password box. Any key or pointer movement brings the box back over a blurred, dimmed animation; after
+  // idleSeconds with nothing typed it goes back. Without the text, the blurred wallpaper shows as before.
+  readonly property bool screensaverMode: root.loadBackground && saver.hasText
+  readonly property int idleSeconds: 10
+  property bool revealed: false
+  readonly property bool keepRevealed: authenticatingPassword || errorState || passwordInput.text.length > 0
+  readonly property bool showField: !screensaverMode || revealed || keepRevealed
+
+  function reveal() {
+    revealed = true
+    idleTimer.restart()
+  }
+
+  // a Connections, not onWakeRequested: Service.qml handles that signal on this view too, and both must run
+  Connections {
+    target: root
+    function onWakeRequested() { root.reveal() }
+  }
+  onKeepRevealedChanged: if (!keepRevealed) idleTimer.restart()
+
+  Timer {
+    id: idleTimer
+    interval: root.idleSeconds * 1000
+    onTriggered: if (!root.keepRevealed) root.revealed = false
+  }
+
   signal submitPassword(string password)
   signal passwordTextEdited(string password)
   signal clearFailureRequested()
@@ -92,6 +119,7 @@ Item {
 
     Image {
       id: wallpaper
+      visible: !root.screensaverMode
       anchors.fill: parent
       source: root.loadBackground ? root.fileUrl(root.backgroundPath) : ""
       fillMode: Image.PreserveAspectCrop
@@ -102,6 +130,7 @@ Item {
     }
 
     MultiEffect {
+      visible: !root.screensaverMode
       anchors.fill: wallpaper
       source: wallpaper
       autoPaddingEnabled: false
@@ -110,6 +139,30 @@ Item {
       blurMax: 128
       blurMultiplier: 1.25
       contrast: -0.08
+    }
+
+    ScreensaverText {
+      id: saver
+      anchors.fill: parent
+      running: root.loadBackground
+      visible: root.screensaverMode
+      // blurs as the password box comes up, and sharpens again as it goes
+      property real veiled: root.showField ? 1 : 0
+      Behavior on veiled { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
+      layer.enabled: veiled > 0
+      layer.effect: MultiEffect {
+        blurEnabled: true
+        blur: saver.veiled
+        blurMax: 48
+        autoPaddingEnabled: false
+      }
+    }
+
+    Rectangle {   // dims the animation behind the password box
+      visible: root.screensaverMode
+      anchors.fill: parent
+      color: Color.background
+      opacity: saver.veiled * 0.55
     }
 
     MouseArea {
@@ -124,6 +177,9 @@ Item {
       width: root.fieldWidth
       height: root.fieldHeight
       anchors.centerIn: parent
+      // hidden, not disabled, while the screensaver shows: it keeps focus, so the first key typed goes in
+      opacity: root.showField ? 1 : 0
+      Behavior on opacity { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
       color: Color.lock.background
       borderSpec: root.inputBorderSpec
       radius: Style.cornerRadius
