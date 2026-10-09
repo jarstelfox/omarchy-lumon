@@ -159,9 +159,23 @@ Item {
     runWake()
   }
 
+  // Local change: Omarchy blanks the displays 5 seconds after locking (and after each wake). With the
+  // screensaver's text available the lock screen plays it (LockView.qml), so they stay lit for
+  // screensaverBlankSeconds instead; without it, 5 seconds as before.
+  readonly property int screensaverBlankSeconds: 600
+
   function armBlankTimer() {
+    screensaverFile.reload()
+    idleBlankTimer.interval = (screensaverFile.text() || "").trim().length > 0 ? screensaverBlankSeconds * 1000 : 5000
     idleBlankTimer.armedAt = Date.now()
     idleBlankTimer.restart()
+  }
+
+  FileView {
+    id: screensaverFile
+    path: Quickshell.env("HOME") + "/.config/omarchy/branding/screensaver.txt"
+    blockLoading: true
+    printErrors: false
   }
 
   function runWake() {
