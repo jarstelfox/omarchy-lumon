@@ -4,11 +4,28 @@ import Quickshell.Io
 import Quickshell.Services.Pam
 import Quickshell.Wayland
 import qs.Commons
+import "Settings.js" as Settings
 
 Item {
   id: root
 
   property var shell: null
+  property var manifest: null      // injected by the shell; gives this plugin's id
+
+  // Local change: settings from this plugin's entry in shell.json (see Settings.js). Re-read when the
+  // file changes; until it loads, and whenever it can't be read or parsed, the defaults apply.
+  readonly property string pluginId: manifest && manifest.id ? String(manifest.id) : "lumon.lock"
+  property var settings: Settings.resolve(null)
+
+  FileView {
+    id: shellConfigFile
+    path: (Quickshell.env("XDG_CONFIG_HOME") || (Quickshell.env("HOME") + "/.config")) + "/omarchy/shell.json"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.settings = Settings.fromShellJson(text(), root.pluginId)
+    onLoadFailed: root.settings = Settings.resolve(null)
+  }
   property string omarchyPath: ""
 
   readonly property string home: Quickshell.env("HOME")
@@ -162,33 +179,38 @@ Item {
   }
 
   // Local change: Omarchy blanks the displays 5 seconds after locking (and after each wake). The lock
-  // screen plays the MDR screen while idle (LockView.qml), so they stay lit for screensaverBlankSeconds.
-  readonly property int screensaverBlankSeconds: 600
+  // screen plays the MDR screen while idle (LockView.qml), so they stay lit for the displayOffSeconds
+  // setting instead.
 
   // Local change: true while runBlank has the displays off, so the lock view can pause its animation
   // instead of rendering to dark screens until the next wake.
   property bool displaysAsleep: false
 
   function armBlankTimer() {
-    idleBlankTimer.interval = screensaverBlankSeconds * 1000
+    idleBlankTimer.interval = settings.displayOffSeconds * 1000
     idleBlankTimer.armedAt = Date.now()
     idleBlankTimer.restart()
   }
 
   // Local change: the lock screen can't hide the pointer itself (no blank shape to ask Hyprland for), so while
-  // locked Hyprland hides it after 3 still seconds (cursor:inactive_timeout); unlocking puts the user's value
-  // back. A Hyprland reload while locked would also put it back, which only means the pointer shows.
+  // locked Hyprland hides it after hidePointerSeconds still seconds (cursor:inactive_timeout); unlocking puts
+  // the user's value back. hidePointerSeconds 0 leaves the pointer alone. A Hyprland reload while locked would
+  // also put the user's value back, which only means the pointer shows.
   property string savedPointerTimeout: ""
+  property bool pointerRestorePending: false
 
   function hidePointerWhileLocked() {
-    if (pointerSaveProc.running) return
+    if (settings.hidePointerSeconds <= 0 || pointerSaveProc.running) return
     pointerSaveProc.running = true
   }
 
   function restorePointer() {
     var value = Number(savedPointerTimeout)
     if (savedPointerTimeout === "" || !isFinite(value)) return
+    // a "hide" command may still be running; restore once it exits, or the restore could be dropped
+    if (pointerSetProc.running) { pointerRestorePending = true; return }
     savedPointerTimeout = ""
+    pointerRestorePending = false
     pointerSetProc.command = ["hyprctl", "eval", "hl.config({ cursor = { inactive_timeout = " + value + " } })"]
     pointerSetProc.running = true
   }
@@ -199,17 +221,23 @@ Item {
     stdout: StdioCollector {
       onStreamFinished: {
         var saved = ""
-        try { saved = String(JSON.parse(text).float) } catch (e) { saved = "0" }
+        try { saved = String(JSON.parse(text).float) } catch (e) { saved = "" }
+        var savedValue = Number(saved)
+        // can't read the user's value: don't hide, or unlocking would have nothing to put back
+        if (saved === "" || !isFinite(savedValue)) return
         // only the first lock saves; a second lock request keeps the value from before the first
         if (root.savedPointerTimeout === "") root.savedPointerTimeout = saved
         if (!root.lockRequested) return root.restorePointer()   // unlocked before this finished
-        pointerSetProc.command = ["hyprctl", "eval", "hl.config({ cursor = { inactive_timeout = 3 } })"]
+        pointerSetProc.command = ["hyprctl", "eval", "hl.config({ cursor = { inactive_timeout = " + root.settings.hidePointerSeconds + " } })"]
         pointerSetProc.running = true
       }
     }
   }
 
-  Process { id: pointerSetProc }
+  Process {
+    id: pointerSetProc
+    onExited: if (root.pointerRestorePending) root.restorePointer()
+  }
 
   function runWake() {
     displaysAsleep = false
@@ -306,6 +334,7 @@ Item {
         sessionLockStabilizeTimer.stop()
         pendingSessionLockTimer.stop()
         root.resetAuthenticationState()
+        root.restorePointer()
         root.runWake()
       }
     }
@@ -315,7 +344,6 @@ Item {
       color: Color.background
 
       LockView {
-        id: lockView
         anchors.fill: parent
         backgroundPath: root.backgroundPath
         backgroundVersion: root.backgroundVersion
@@ -327,6 +355,11 @@ Item {
         loadBackground: root.locked
         displaysAsleep: root.displaysAsleep
         passwordText: root.enteredPassword
+        loginTimeoutSeconds: root.settings.loginTimeoutSeconds
+        idleScreen: root.settings.idleScreen
+        crt: root.settings.crtStrength
+        mdrClusters: root.settings.clusters
+        mdrFiles: root.settings.files
         onPasswordTextEdited: function(password) { root.enteredPassword = password }
         onSubmitPassword: function(password) { root.submitPassword(password) }
         onClearFailureRequested: root.failureMessage = ""
@@ -357,6 +390,11 @@ Item {
       inputEnabled: false
       loadBackground: root.previewVisible
       passwordText: ""
+      loginTimeoutSeconds: root.settings.loginTimeoutSeconds
+      idleScreen: root.settings.idleScreen
+      crt: root.settings.crtStrength
+      mdrClusters: root.settings.clusters
+      mdrFiles: root.settings.files
     }
 
     MouseArea {

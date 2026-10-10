@@ -47,7 +47,9 @@ Item {
   }
 
   // Cold Harbor and Siena are on screen in the stills; the rest are other MDR file names
-  readonly property var files: ["Cold Harbor", "Siena", "Cocoa", "Dranesville", "Tumwater", "Allentown"]
+  // file names and cluster count are settings (Settings.js); these defaults match it
+  property var files: ["Cold Harbor", "Siena", "Cocoa", "Dranesville", "Tumwater", "Allentown"]
+  property int clusterCount: 3
   property int fileIndex: 0
   property var binPct: randomBins(10, 80)
   readonly property int complete: Math.floor(binPct.reduce((a, b) => a + b, 0) / 5)
@@ -178,9 +180,11 @@ Item {
         return { c: span(0, cols - 1), r: span(firstRow, lastRow), rad: rad }
       }
       // three hidden clusters of "scary" numbers, in cell coordinates
-      property var clusters: [newCluster(), newCluster(), newCluster()]
-      onColsChanged: clusters = [newCluster(), newCluster(), newCluster()]
-      onLastRowChanged: clusters = [newCluster(), newCluster(), newCluster()]
+      function newClusters() { const out = []; for (let i = 0; i < root.clusterCount; i++) out.push(newCluster()); return out }
+      property var clusters: newClusters()
+      onColsChanged: clusters = newClusters()
+      onLastRowChanged: clusters = newClusters()
+      Connections { target: root; function onClusterCountChanged() { grid.clusters = grid.newClusters() } }
       property bool busy: false
       property var picked: []          // digits in flight
       property int pickedCluster: -1
@@ -235,7 +239,7 @@ Item {
           const d = digits.itemAt(i)
           if (d) d.digit = Math.floor(Math.random() * 10)
         }
-        clusters = [newCluster(), newCluster(), newCluster()]
+        clusters = newClusters()
         busy = false
       }
 

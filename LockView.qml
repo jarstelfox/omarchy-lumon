@@ -4,7 +4,7 @@
 //
 // Screensaver mode (from the earlier clone): while locked and idle the lock screen is the
 // interactive MDR screen, hover and refine included. A key press fades it into the login; the
-// first key only wakes it and doesn't go into the password. idleSeconds with nothing typed
+// first key only wakes it and doesn't go into the password. loginTimeoutSeconds with nothing typed
 // fades back. Clicks on the digit grid belong to MDR (refining); a click anywhere else (header,
 // bins, margins) shows the login.
 import QtQuick
@@ -26,6 +26,13 @@ Item {
   property string passwordText: ""
   property bool syncingPasswordText: false
   property bool displaysAsleep: false   // set by Service.qml while it has the displays off
+  // settings (Settings.js), set by Service.qml from shell.json; the defaults here keep the view
+  // usable on its own, e.g. in test/shell.qml
+  property int loginTimeoutSeconds: 10
+  property string idleScreen: "mdr"
+  property real crt: 1
+  property int mdrClusters: 3
+  property var mdrFiles: []
 
   signal submitPassword(string password)
   signal passwordTextEdited(string password)
@@ -64,8 +71,8 @@ Item {
   property bool blink: true
   property string now: ""
 
-  readonly property bool screensaverMode: root.loadBackground
-  readonly property int idleSeconds: 10
+  // MDR shows only when the idleScreen setting asks for it
+  readonly property bool screensaverMode: root.loadBackground && idleScreen === "mdr"
   property bool revealed: false
   // typing or checking keeps the login up; a failure message alone doesn't, so idle clears it and
   // MDR comes back instead of a stale error sitting on screen until the displays blank
@@ -79,7 +86,7 @@ Item {
   onKeepRevealedChanged: if (!keepRevealed) idleTimer.restart()
   Timer {
     id: idleTimer
-    interval: root.idleSeconds * 1000
+    interval: root.loginTimeoutSeconds * 1000
     onTriggered: {
       if (root.keepRevealed) return
       root.revealed = false
@@ -250,12 +257,12 @@ Item {
   // CRT tube, full strength, same shader as the MDR screen
   ShaderEffect {
     anchors.fill: parent
-    visible: root.loginLive
+    visible: root.loginLive && root.crt > 0
     property real time: root.time
-    property real strength: 1
+    property real strength: root.crt
     property vector2d resolution: Qt.vector2d(width, height)
     property var source: ShaderEffectSource {
-      sourceItem: content; hideSource: true; live: root.loginLive
+      sourceItem: content; hideSource: root.crt > 0; live: root.loginLive && root.crt > 0
       textureSize: Qt.size(Math.ceil(root.width * Screen.devicePixelRatio), Math.ceil(root.height * Screen.devicePixelRatio))
     }
     fragmentShader: Qt.resolvedUrl("crt.frag.qsb")
@@ -277,8 +284,11 @@ Item {
     opacity: root.screensaverMode && !root.showField ? 1 : 0
     visible: opacity > 0
     running: visible && !root.displaysAsleep
+    crt: root.crt
+    clusterCount: root.mdrClusters
     Behavior on opacity { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
     onActivity: root.wakeRequested()
     onOutsideClicked: { root.wakeRequested(); root.reveal(); root.forcePasswordFocus() }
+    Component.onCompleted: if (root.mdrFiles.length > 0) files = Qt.binding(() => root.mdrFiles)
   }
 }
