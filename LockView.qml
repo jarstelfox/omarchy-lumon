@@ -65,7 +65,9 @@ Item {
   readonly property bool screensaverMode: root.loadBackground
   readonly property int idleSeconds: 10
   property bool revealed: false
-  readonly property bool keepRevealed: authenticatingPassword || errorState || passwordInput.text.length > 0
+  // typing or checking keeps the login up; a failure message alone doesn't, so idle clears it and
+  // MDR comes back instead of a stale error sitting on screen until the displays blank
+  readonly property bool keepRevealed: authenticatingPassword || passwordInput.text.length > 0
   readonly property bool showField: !screensaverMode || revealed || keepRevealed
 
   function reveal() {
@@ -76,7 +78,11 @@ Item {
   Timer {
     id: idleTimer
     interval: root.idleSeconds * 1000
-    onTriggered: if (!root.keepRevealed) root.revealed = false
+    onTriggered: {
+      if (root.keepRevealed) return
+      root.revealed = false
+      if (root.errorState) root.clearFailureRequested()
+    }
   }
 
   Timer {
