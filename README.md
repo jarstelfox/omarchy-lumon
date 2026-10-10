@@ -91,6 +91,18 @@ Omarchy's own `idle.screensaver` and `idle.lock` settings.
 For one screensaver run, `MDR_CRT=off` overrides `crt`, and
 `MDR_FAKE_SIZE=1920x1080` lays the screen out as if it were that size.
 
+## Removing it
+
+Turn Omarchy's own lock back on first, then remove the plugin:
+
+```bash
+omarchy plugin enable omarchy.lock
+omarchy plugin remove lumon.lock
+omarchy restart shell
+```
+
+The screensaver-only mode installs nothing; delete the clone.
+
 ## If a lock ever gets stuck
 
 Switch to a text console (Ctrl+Alt+F3), log in, put a known-good version back,
