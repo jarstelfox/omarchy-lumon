@@ -1,9 +1,8 @@
-// Test harness for LockView.qml: `qs -n -p test` from the repo root. Fake auth, never locks anything.
+// Test harness for LockView.qml: `qs -n -p test-lock.qml` from the repo root. Fake auth, never locks anything.
 // Password "lumon" succeeds (quits); anything else fails. Quits by itself after 60s.
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
-import ".."   // LockView.qml and the MDR files live one folder up
 
 ShellRoot {
   PanelWindow {
