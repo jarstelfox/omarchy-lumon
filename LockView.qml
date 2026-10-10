@@ -5,7 +5,8 @@
 // Screensaver mode (from the earlier clone): while locked and idle the lock screen is the
 // interactive MDR screen, hover and refine included. A key press fades it into the login; the
 // first key only wakes it and doesn't go into the password. idleSeconds with nothing typed
-// fades back. Clicks belong to MDR (refining), so they don't reveal the login.
+// fades back. Clicks on the digit grid belong to MDR (refining); a click anywhere else (header,
+// bins, margins) shows the login.
 import QtQuick
 import QtQuick.Effects
 import QtQuick.Window
@@ -270,5 +271,6 @@ Item {
     running: visible
     Behavior on opacity { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
     onActivity: root.wakeRequested()
+    onOutsideClicked: { root.wakeRequested(); root.reveal(); root.forcePasswordFocus() }
   }
 }
