@@ -3,7 +3,7 @@ name: testing-mdr-screen
 description: >-
   Checks a change to the MDR screensaver on the real display: runs it briefly,
   moves the pointer, screenshots it, reads the log, and tries other monitor
-  sizes. Use after editing MdrScreen.qml, shell.qml, crt.frag or lumon.svg,
+  sizes. Use after editing MdrScreen.qml, screensaver.qml, crt.frag or lumon.svg,
   when asked to screenshot or preview the MDR screen, or to test hover, refine
   clicks, bins, file completion or multi-monitor layout.
 ---
@@ -18,19 +18,21 @@ and wait for a yes. Keep every run under `timeout`.
 ## One run with a screenshot
 
 ```bash
-timeout 6 qs -n -c mdr > /tmp/mdr.log 2>&1 &
+timeout 6 qs -n -p screensaver.qml > /tmp/mdr.log 2>&1 &
 sleep 2.5
 echo "mouseto 0.5 0.5" | dotoolc     # pointer to mid-screen (fractions of the screen)
 sleep 0.8
 hyprctl cursorpos                    # dotool lands near, not exactly on, the target
 grim -c /tmp/mdr.png                 # -c draws the pointer into the shot
 wait
-grep -vE 'qt.qpa.services|Launching|Shell ID|Saving logs|Configuration Loaded' /tmp/mdr.log
+grep -vE 'qt.qpa.services|Launching|Shell ID|Saving logs|Configuration Loaded|qmlscanner' /tmp/mdr.log
 ```
 
-The `qt.qpa.services ... Could not register app ID` warning appears on every
-Quickshell start, the desktop shell's own included; it's harmless. Anything
-else in the log is worth reading.
+Two warnings are harmless: `qt.qpa.services ... Could not register app ID`
+(every Quickshell start has it, the desktop shell's own included), and the
+qmlscanner noting that `Service.qml`'s `qs.Commons` import can't be resolved
+from the repo root (the screensaver doesn't load `Service.qml`). Anything else
+in the log is worth reading.
 
 Look at the screenshot before reporting: a run that loads without errors can
 still draw wrong.
@@ -42,7 +44,7 @@ display, so one monitor can check them all:
 
 ```bash
 for sz in 1920x1080 3440x1440 1080x1920 1366x768; do
-  MDR_FAKE_SIZE=$sz timeout 4 qs -n -c mdr >/dev/null 2>&1 &
+  MDR_FAKE_SIZE=$sz timeout 4 qs -n -p screensaver.qml >/dev/null 2>&1 &
   sleep 2.8; grim /tmp/mdr-$sz.png; wait
 done
 ```
@@ -68,7 +70,7 @@ preset `binPct` (four bins at 100) tests file completion in one click.
 
 ## Checking whether it's still running
 
-Don't use `pgrep -f 'c mdr'`: the shell running the check has that text in its
+Don't use `pgrep -f screensaver.qml`: the shell running the check has that text in its
 own command line and matches itself. Ask Hyprland for the overlay instead:
 
 ```bash

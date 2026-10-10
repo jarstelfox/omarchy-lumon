@@ -20,12 +20,11 @@ wait for a yes. Never type, ask for or handle the user's real password.
 
 ## 1. Harness: the view with fake authentication
 
-`test/shell.qml` imports `LockView.qml` from the repo root and runs it in a
-plain overlay with fake auth: `lumon` unlocks and quits, anything else fails, and it quits
+`test-lock.qml` runs `LockView.qml` in a plain overlay with fake auth: `lumon` unlocks and quits, anything else fails, and it quits
 itself after 60 seconds. It never touches the real lock.
 
 ```bash
-timeout 30 qs -n -p test > /tmp/lock-test.log 2>&1 &
+timeout 30 qs -n -p test-lock.qml > /tmp/lock-test.log 2>&1 &
 sleep 2.5
 echo "key x" | dotoolc          # reveals the login; this first key is swallowed
 echo "type wrong" | dotoolc; echo "key enter" | dotoolc; sleep 1.4
@@ -44,8 +43,11 @@ shell running the check.
 
 ## 2. Preview inside the real shell
 
-If the MDR files changed, `scripts/sync-mdr.sh --check` should report nothing
-first: the lock runs the copies in this repo, not the mdr-screensaver checkout.
+The shell runs the plugin folder (`~/.config/omarchy/plugins/lumon.lock`), so
+the change has to be there. To check the safety net as well, add a stray `}`
+to `LockView.qml` there, restart and preview: the plain fallback password field
+should show. Put the file back with `git checkout -- LockView.qml` and restart
+again before going on.
 
 ```bash
 omarchy restart shell            # the only way past Qt's QML type cache
@@ -60,9 +62,10 @@ the journal stops here.
 ## 3. A real lock, with the user present
 
 Start the watcher first, giving it the last commit whose view is known to
-work. If the view fails to load or the shell dies while locked, it puts that
-`LockView.qml` back and restarts the shell, which locks again with the good
-view. It never unlocks.
+work. If the lock fails to load or the shell dies while locked, it puts that
+commit's `Service.qml`, `LockView.qml`, `MdrScreen.qml` and `Settings.js` back
+(keeping any uncommitted edits as `<file>.bak-<time>`) and restarts the shell,
+which locks again with them. It never unlocks.
 
 ```bash
 .agents/skills/testing-lock-changes/scripts/watch-lock.sh /tmp/lock-watch.log <good-rev> &
