@@ -1,9 +1,10 @@
-// Macrodata Refinement screensaver: run with `qs -n -c mdr`. Any key quits.
+// Macrodata Refinement screensaver: run with `qs -n -p screensaver` from the repo root. Any key quits.
 // MDR_CRT=full|subtle|off sets the CRT tube (default full). Test hook: MDR_FAKE_SIZE=1920x1080
 // lays the screen out as if it were that size, shrunk to fit this display.
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
+import ".."   // MdrScreen.qml and its shader and logo live one folder up
 
 ShellRoot {
   Variants {

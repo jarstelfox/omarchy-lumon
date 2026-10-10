@@ -1,5 +1,5 @@
 // The Macrodata Refinement screen as a reusable piece: used by the standalone screensaver
-// (shell.qml here) and by the lock screen (the omarchy-lumon-lock plugin).
+// (screensaver/shell.qml) and by the lock screen (LockView.qml).
 // Modelled on the Cold Harbor file screen (Severance S2E1): blue CRT, sparse bold digits at
 // uneven heights, a small patch that swells under the cursor, hidden "scary" clusters that
 // jitter when you get close. Click a cluster to refine it into a bin.
