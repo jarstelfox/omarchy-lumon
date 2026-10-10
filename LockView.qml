@@ -1,11 +1,19 @@
+// Lumon terminal login for the Omarchy lock screen. Drop-in replacement for the stock
+// LockView.qml: same properties, signals and functions, so Service.qml (PAM password and
+// fingerprint) is untouched. Styled to match the MDR screensaver: blue CRT, cyan glow.
+//
+// Screensaver mode (from the earlier clone): while locked and idle the lock screen is the
+// interactive MDR screen, hover and refine included. A key press fades it into the login; the
+// first key only wakes it and doesn't go into the password. idleSeconds with nothing typed
+// fades back. Clicks belong to MDR (refining), so they don't reveal the login.
 import QtQuick
 import QtQuick.Effects
-import qs.Commons
-import qs.Ui
+import QtQuick.Window
 
 Item {
   id: root
 
+  // --- interface used by Service.qml (keep in sync with the stock LockView) ---
   property string backgroundPath: ""
   property int backgroundVersion: 0
   property bool fingerprintConfigured: false
@@ -17,32 +25,44 @@ Item {
   property string passwordText: ""
   property bool syncingPasswordText: false
 
-  readonly property string placeholderText: "Enter Password"
-  readonly property int fieldWidth: 381
-  readonly property int fieldHeight: 67
-  readonly property int outlineThickness: 3
-  readonly property int fieldFontSize: Math.round(Style.font.heading * 1.125)
-  readonly property int passwordDotFontSize: Math.round(Style.font.heading * 1.33)
-  readonly property int passwordDotLetterSpacing: Math.round(Style.font.heading * 0.19)
-  // Space to keep clear on each side of the field for the fingerprint icon
-  // (icon width plus a gap) so the centered dots never run under it.
-  readonly property real fingerprintReserve: fingerprintConfigured ? Math.round(fingerprintIcon.implicitWidth + 12) : 0
-  // Shrink the dots to fit once the password outgrows the field, so every
-  // keystroke stays visible — otherwise long passwords clip with no feedback.
-  readonly property real passwordDotScale: dotMetrics.advanceWidth > 0
-    ? Math.min(1, (passwordInput.width - 4) / dotMetrics.advanceWidth)
-    : 1
-  readonly property bool showPasswordCursor: inputEnabled && !authenticatingPassword && failureMessage.length === 0
-  readonly property bool errorState: failureMessage.length > 0
-  readonly property var inputBorderSpec: errorState
-    ? Border.surfaceSpec("lock", "border-error", Color.lock.borderError, root.outlineThickness, "border-alpha")
-    : Border.surfaceSpec("lock", "border-active", Color.lock.borderActive, root.outlineThickness, "border-alpha")
+  signal submitPassword(string password)
+  signal passwordTextEdited(string password)
+  signal clearFailureRequested()
+  signal wakeRequested()
 
-  // Screensaver mode: with the screensaver's text available, an idle lock screen is a plain screensaver, the
-  // animation and nothing else. A key press or a click fades it into the usual lock screen (blurred wallpaper
-  // and password box); idleSeconds with nothing typed fades back. Moving the pointer alone doesn't wake it.
-  // Without the text, the usual lock screen shows as before.
-  readonly property bool screensaverMode: root.loadBackground && saver.hasText
+  function forcePasswordFocus() { passwordInput.forceActiveFocus() }
+  function clearPassword() { passwordTextEdited("") }
+  function syncPasswordText() {
+    if (passwordInput.text === passwordText) return
+    syncingPasswordText = true
+    passwordInput.text = passwordText
+    syncingPasswordText = false
+  }
+  function submit() {
+    var submitted = root.passwordText
+    root.passwordTextEdited("")
+    if (submitted.length > 0) root.submitPassword(submitted)
+  }
+
+  onPasswordTextChanged: syncPasswordText()
+  onInputEnabledChanged: if (inputEnabled) Qt.callLater(forcePasswordFocus)
+  Component.onCompleted: {
+    syncPasswordText()
+    if (inputEnabled) Qt.callLater(forcePasswordFocus)
+  }
+
+  // --- look ---
+  readonly property color bg: "#04386c"
+  readonly property color ink: "#6fd0fa"
+  readonly property color inkHot: "#c8f1ff"
+  readonly property string font: "Liberation Sans"
+  readonly property real s: Math.max(0.3, Math.min(width / 2048, height / 1280))   // design px -> screen px
+  readonly property bool errorState: failureMessage.length > 0
+  property real time: 0
+  property bool blink: true
+  property string now: ""
+
+  readonly property bool screensaverMode: root.loadBackground
   readonly property int idleSeconds: 10
   property bool revealed: false
   readonly property bool keepRevealed: authenticatingPassword || errorState || passwordInput.text.length > 0
@@ -52,218 +72,197 @@ Item {
     revealed = true
     idleTimer.restart()
   }
-
   onKeepRevealedChanged: if (!keepRevealed) idleTimer.restart()
-
   Timer {
     id: idleTimer
     interval: root.idleSeconds * 1000
     onTriggered: if (!root.keepRevealed) root.revealed = false
   }
 
-  signal submitPassword(string password)
-  signal passwordTextEdited(string password)
-  signal clearFailureRequested()
-  signal wakeRequested()
-
-  // Cache-busts the lock background by appending `?v=`. Adding a query
-  // string keeps Image's loader happy while forcing it to reload when the
-  // user picks a new background mid-session.
-  function fileUrl(path) {
-    if (!path) return ""
-    var encoded = String(path).split("/").map(encodeURIComponent).join("/")
-    return "file://" + encoded + "?v=" + backgroundVersion
+  Timer {
+    interval: 33; running: root.visible; repeat: true
+    onTriggered: root.time += 0.033
   }
-
-  function forcePasswordFocus() {
-    passwordInput.forceActiveFocus()
-  }
-
-  function clearPassword() {
-    passwordTextEdited("")
-  }
-
-  function syncPasswordText() {
-    if (passwordInput.text === passwordText) return
-    syncingPasswordText = true
-    passwordInput.text = passwordText
-    syncingPasswordText = false
-  }
-
-  onPasswordTextChanged: syncPasswordText()
-  onInputEnabledChanged: {
-    if (inputEnabled) Qt.callLater(forcePasswordFocus)
-  }
-  Component.onCompleted: {
-    syncPasswordText()
-    if (inputEnabled) Qt.callLater(forcePasswordFocus)
-  }
-
-  // Measures the masked password at full size; passwordDotScale compares this
-  // against the field width to decide how far the dots must shrink to fit.
-  TextMetrics {
-    id: dotMetrics
-    font.family: Style.font.family
-    font.pixelSize: root.passwordDotFontSize
-    font.letterSpacing: root.passwordDotLetterSpacing
-    text: "●".repeat(passwordInput.text.length)
+  Timer {
+    interval: 530; running: root.visible; repeat: true; triggeredOnStart: true
+    onTriggered: { root.blink = !root.blink; root.now = Qt.formatDateTime(new Date(), "MM/dd/yyyy  hh:mm:ss") }
   }
 
   Rectangle {
+    id: content
     anchors.fill: parent
-    color: Color.background
-
-    Image {
-      id: wallpaper
-      anchors.fill: parent
-      source: root.loadBackground ? root.fileUrl(root.backgroundPath) : ""
-      fillMode: Image.PreserveAspectCrop
-      asynchronous: true
-      cache: false
-      sourceSize.width: width
-      sourceSize.height: height
+    color: root.bg
+    layer.enabled: true
+    layer.effect: MultiEffect {            // phosphor glow, same as the MDR screen
+      shadowEnabled: true
+      shadowColor: root.ink
+      shadowBlur: 0.5
+      shadowOpacity: 0.7
+      shadowHorizontalOffset: 0
+      shadowVerticalOffset: 0
     }
 
-    MultiEffect {
-      anchors.fill: wallpaper
-      source: wallpaper
-      autoPaddingEnabled: false
-      blurEnabled: root.loadBackground && wallpaper.status === Image.Ready
-      blur: 1.0
-      blurMax: 128
-      blurMultiplier: 1.25
-      contrast: -0.08
+    Text {
+      x: 90 * root.s; y: 70 * root.s
+      text: "LUMON INDUSTRIES"; color: root.ink
+      font.family: root.font; font.bold: true; font.pixelSize: 34 * root.s; font.letterSpacing: 6 * root.s
+    }
+    Text {
+      anchors.right: parent.right; anchors.rightMargin: 90 * root.s; y: 70 * root.s
+      text: root.now; color: root.ink
+      font.family: root.font; font.bold: true; font.pixelSize: 34 * root.s; font.letterSpacing: 2 * root.s
     }
 
-    // the screensaver covers the usual lock screen while idle, and fades out when someone wakes it
-    Rectangle {
-      id: screensaverLayer
-      anchors.fill: parent
-      color: Color.background
-      visible: opacity > 0
-      opacity: root.screensaverMode && !root.showField ? 1 : 0
-      Behavior on opacity { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
-
-      ScreensaverText {
-        id: saver
-        anchors.fill: parent
-        running: root.loadBackground
-      }
-    }
-
-    MouseArea {
-      anchors.fill: parent
-      hoverEnabled: true
-      onClicked: { root.wakeRequested(); root.reveal(); root.forcePasswordFocus() }
-      onPositionChanged: root.wakeRequested()
-    }
-
-    BorderSurface {
-      id: inputField
-      width: root.fieldWidth
-      height: root.fieldHeight
+    Column {
       anchors.centerIn: parent
-      // hidden, not disabled, while the screensaver shows: it keeps focus, so the first key typed goes in
-      opacity: root.showField ? 1 : 0
-      Behavior on opacity { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
-      color: Color.lock.background
-      borderSpec: root.inputBorderSpec
-      radius: Style.cornerRadius
-      clip: true
+      anchors.verticalCenterOffset: -40 * root.s
+      spacing: 0
 
-      TextInput {
-        id: passwordInput
-        anchors.fill: parent
-        anchors.topMargin: inputField.borderTop
-        // Reserve the fingerprint icon's width on both sides so the centered
-        // dots stay symmetric and never slide under the icon as they grow.
-        anchors.rightMargin: inputField.borderRight + 18 + root.fingerprintReserve
-        anchors.bottomMargin: inputField.borderBottom
-        anchors.leftMargin: inputField.borderLeft + 18 + root.fingerprintReserve
-        verticalAlignment: TextInput.AlignVCenter
-        horizontalAlignment: TextInput.AlignHCenter
-        activeFocusOnPress: true
-        clip: true
-        enabled: root.inputEnabled && !root.authenticatingPassword
-        readOnly: root.authenticatingPassword
-        echoMode: TextInput.Password
-        passwordCharacter: "\u25CF"
-        passwordMaskDelay: 0
-        color: Color.lock.text
-        selectionColor: Color.lock.selection
-        selectedTextColor: Color.lock.text
-        font.family: Style.font.family
-        font.pixelSize: text.length > 0 ? Math.max(1, Math.floor(root.passwordDotFontSize * root.passwordDotScale)) : root.fieldFontSize
-        font.letterSpacing: text.length > 0 ? root.passwordDotLetterSpacing * root.passwordDotScale : 0
-        cursorVisible: activeFocus && root.showPasswordCursor && text.length > 0
-        cursorDelegate: Rectangle {
-          width: 2
-          color: Color.lock.text
-          visible: passwordInput.cursorVisible
-        }
-
-        onTextChanged: {
-          if (!root.syncingPasswordText) root.passwordTextEdited(text)
-          if (text.length > 0) {
-            root.wakeRequested()
-            root.reveal()
-          }
-          if (text.length > 0 && root.failureMessage.length > 0) root.clearFailureRequested()
-        }
-
-        onAccepted: {
-          var submitted = root.passwordText
-          root.passwordTextEdited("")
-          if (submitted.length > 0) root.submitPassword(submitted)
-        }
-
-        Keys.onPressed: function(event) {
-          root.wakeRequested()
-          // while the screensaver shows, the first key only wakes it: it doesn't go into the password
-          if (root.screensaverMode && !root.showField) {
-            root.reveal()
-            event.accepted = true
-            return
-          }
-          root.reveal()
-          if (event.key === Qt.Key_Escape || (event.modifiers & Qt.ControlModifier && event.key === Qt.Key_U)) {
-            root.passwordTextEdited("")
-            event.accepted = true
-          }
-        }
+      Image {
+        anchors.horizontalCenter: parent.horizontalCenter
+        source: Qt.resolvedUrl("lumon.svg")
+        sourceSize.height: 190 * root.s
       }
-
+      Item { width: 1; height: 56 * root.s }
       Text {
-        textFormat: Text.PlainText
-        anchors.fill: passwordInput
-        text: root.authenticatingPassword ? "Checking…" : (root.failureMessage.length > 0 ? root.failureMessage : root.placeholderText)
-        visible: passwordInput.text.length === 0
-        color: root.authenticatingPassword ? Color.lock.text : (root.failureMessage.length > 0 ? Color.lock.textError : Color.lock.placeholder)
-        font.family: Style.font.family
-        font.pixelSize: root.fieldFontSize
-        font.italic: !root.authenticatingPassword && root.failureMessage.length > 0
-        horizontalAlignment: Text.AlignHCenter
-        verticalAlignment: Text.AlignVCenter
-        elide: Text.ElideRight
+        anchors.horizontalCenter: parent.horizontalCenter
+        text: "Welcome to Lumon Industries Terminal System " + (root.blink ? "_" : " ")
+        color: root.inkHot
+        font.family: root.font; font.bold: true; font.pixelSize: 50 * root.s
       }
+      Item { width: 1; height: 90 * root.s }
 
-      // Fingerprint hint pinned inside the field's right edge when a sensor is
-      // enrolled, so the user knows they can touch to unlock instead of typing.
-      // Matches hyprlock, which draws its fingerprint icon in the same spot.
-      Text {
-        id: fingerprintIcon
-        objectName: "fingerprintIndicator"
-        anchors.right: parent.right
-        anchors.rightMargin: inputField.borderRight + 18
-        anchors.verticalCenter: parent.verticalCenter
-        visible: root.fingerprintConfigured
-        text: "󰈷"
-        color: Color.lock.placeholder
-        font.family: Style.font.family
-        font.pixelSize: Math.round(root.fieldFontSize * 1.1)
-        horizontalAlignment: Text.AlignHCenter
-        verticalAlignment: Text.AlignVCenter
+      Column {
+        anchors.horizontalCenter: parent.horizontalCenter
+        spacing: 18 * root.s
+
+        Text {
+          text: "Password:"; color: root.ink
+          font.family: root.font; font.bold: true; font.pixelSize: 32 * root.s
+        }
+        Rectangle {
+          id: field
+          width: 860 * root.s; height: 82 * root.s
+          color: "transparent"
+          border.color: root.errorState ? root.inkHot : root.ink
+          border.width: Math.max(2, 3 * root.s)
+
+          TextInput {
+            id: passwordInput
+            anchors.fill: parent
+            anchors.leftMargin: 26 * root.s; anchors.rightMargin: 26 * root.s
+            verticalAlignment: TextInput.AlignVCenter
+            clip: true
+            activeFocusOnPress: true
+            enabled: root.inputEnabled && !root.authenticatingPassword
+            readOnly: root.authenticatingPassword
+            echoMode: TextInput.Password
+            passwordCharacter: "*"
+            passwordMaskDelay: 0
+            color: root.inkHot
+            selectionColor: root.ink
+            selectedTextColor: root.bg
+            font.family: root.font; font.bold: true; font.pixelSize: 44 * root.s; font.letterSpacing: 6 * root.s
+            cursorVisible: false
+            onTextChanged: {
+              if (!root.syncingPasswordText) root.passwordTextEdited(text)
+              if (text.length > 0) root.wakeRequested()
+              if (text.length > 0 && root.failureMessage.length > 0) root.clearFailureRequested()
+            }
+            onAccepted: root.submit()
+            Keys.onPressed: function(event) {
+              root.wakeRequested()
+              // while MDR shows, the first key only wakes it: it doesn't go into the password
+              if (root.screensaverMode && !root.showField) {
+                root.reveal()
+                event.accepted = true
+                return
+              }
+              root.reveal()
+              if (event.key === Qt.Key_Escape || (event.modifiers & Qt.ControlModifier && event.key === Qt.Key_U)) {
+                root.passwordTextEdited("")
+                event.accepted = true
+              }
+            }
+          }
+          // block cursor after the last asterisk
+          Rectangle {
+            visible: passwordInput.activeFocus && root.blink && !root.authenticatingPassword
+            x: passwordInput.x + Math.min(passwordInput.contentWidth, passwordInput.width) + 4 * root.s
+            anchors.verticalCenter: parent.verticalCenter
+            width: 20 * root.s; height: 40 * root.s; color: root.inkHot
+          }
+        }
+
+        // striped LOGIN button, like the reference
+        Rectangle {
+          id: loginButton
+          width: field.width; height: 88 * root.s
+          color: login.pressed ? root.inkHot : root.ink
+          clip: true
+          Column {
+            anchors.fill: parent
+            Repeater {
+              model: Math.ceil(loginButton.height / (6 * root.s))
+              Rectangle { width: loginButton.width; height: 6 * root.s; color: index % 2 ? root.bg : "transparent"; opacity: 0.22 }
+            }
+          }
+          Text {
+            anchors.centerIn: parent
+            text: root.authenticatingPassword ? "VERIFYING" + ".".repeat(1 + Math.floor(root.time * 2) % 3) : "LOGIN"
+            color: root.bg; font.family: root.font; font.bold: true; font.pixelSize: 36 * root.s; font.letterSpacing: 4 * root.s
+          }
+          MouseArea {
+            id: login
+            anchors.fill: parent
+            enabled: root.inputEnabled && !root.authenticatingPassword
+            onClicked: { root.wakeRequested(); root.submit(); root.forcePasswordFocus() }
+          }
+        }
+
+        Text {
+          width: field.width
+          horizontalAlignment: Text.AlignHCenter
+          text: root.errorState ? root.failureMessage.toUpperCase()
+              : (root.fingerprintConfigured ? "Or touch the fingerprint sensor" : "")
+          color: root.errorState ? root.inkHot : root.ink
+          opacity: root.errorState ? (root.blink ? 1 : 0.55) : 0.8
+          font.family: root.font; font.bold: true; font.pixelSize: 28 * root.s; font.letterSpacing: 2 * root.s
+        }
       }
     }
+  }
+
+  // CRT tube, full strength, same shader as the MDR screen
+  ShaderEffect {
+    anchors.fill: parent
+    property real time: root.time
+    property real strength: 1
+    property vector2d resolution: Qt.vector2d(width, height)
+    property var source: ShaderEffectSource {
+      sourceItem: content; hideSource: true; live: true
+      textureSize: Qt.size(Math.ceil(root.width * Screen.devicePixelRatio), Math.ceil(root.height * Screen.devicePixelRatio))
+    }
+    fragmentShader: Qt.resolvedUrl("crt.frag.qsb")
+  }
+
+  // clicks anywhere wake the screen and return focus to the field; the button handles its own
+  MouseArea {
+    anchors.fill: parent
+    z: -1
+    hoverEnabled: true
+    onClicked: { root.wakeRequested(); root.reveal(); root.forcePasswordFocus() }
+    onPositionChanged: root.wakeRequested()
+  }
+
+  // MDR covers the login while idle and fades out when someone presses a key
+  MdrScreen {
+    id: mdr
+    anchors.fill: parent
+    opacity: root.screensaverMode && !root.showField ? 1 : 0
+    visible: opacity > 0
+    running: visible
+    Behavior on opacity { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
+    onActivity: root.wakeRequested()
   }
 }
