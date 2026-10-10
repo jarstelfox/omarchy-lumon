@@ -154,11 +154,21 @@ Item {
         sourceSize.height: 190 * root.s
       }
       Item { width: 1; height: 56 * root.s }
-      Text {
+      // the cursor is its own character that only changes visibility, so the line keeps one width
+      // and its centring doesn't jump with the blink
+      Row {
         anchors.horizontalCenter: parent.horizontalCenter
-        text: "Welcome to Lumon Industries Terminal System " + (root.blink ? "_" : "\u2002")
-        color: root.inkHot
-        font.family: root.font; font.bold: true; font.pixelSize: 50 * root.s
+        Text {
+          text: "Welcome to Lumon Industries Terminal System "
+          color: root.inkHot
+          font.family: root.font; font.bold: true; font.pixelSize: 50 * root.s
+        }
+        Text {
+          text: "_"
+          opacity: root.blink ? 1 : 0
+          color: root.inkHot
+          font.family: root.font; font.bold: true; font.pixelSize: 50 * root.s
+        }
       }
       Item { width: 1; height: 90 * root.s }
 
