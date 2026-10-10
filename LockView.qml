@@ -321,6 +321,9 @@ Item {
     source: Qt.resolvedUrl("MdrScreen.qml")
     opacity: root.screensaverMode && !root.showField ? 1 : 0
     visible: opacity > 0
+    // while fading, draw MDR (CRT pass included) into one texture and fade that; fading the items
+    // themselves let the flat, un-curved screen show through for the length of the fade
+    layer.enabled: opacity > 0 && opacity < 1
     Behavior on opacity { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
   }
   Binding { target: mdrLoader.item; property: "running"; value: mdrLoader.visible && !root.displaysAsleep; when: mdrLoader.item !== null }
