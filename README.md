@@ -42,6 +42,9 @@ omarchy-shell lock preview      # see it without locking; a click closes it
 
 Then try a real lock with `omarchy system lock`.
 
+Rather have the lock open straight to the login, with no MDR screen? Set
+`"idleScreen": "login"` (see [Settings](#settings)).
+
 Needs Quickshell 0.3 or newer and the Liberation Sans font.
 
 ## On the lock screen
@@ -75,6 +78,12 @@ apply without a restart. Anything missing or out of range uses the default.
 | `crt` | `full` | `full`, `subtle`, `off` | the curved CRT tube, bloom and scanlines |
 | `clusters` | 3 | 1 to 8 | hidden scary-number clusters on the MDR screen |
 | `files` | six MDR files | list of names | the file names the MDR screen works through |
+
+The three `crt` looks:
+
+| `full` (default) | `subtle` | `off` |
+|---|---|---|
+| ![CRT full](docs/mdr.png) | ![CRT subtle](docs/crt-subtle.png) | ![CRT off](docs/crt-off.png) |
 
 When the lock starts the screensaver and how long until it locks are
 Omarchy's own `idle.screensaver` and `idle.lock` settings.
