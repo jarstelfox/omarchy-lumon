@@ -161,9 +161,8 @@ Item {
     runWake()
   }
 
-  // Local change: Omarchy blanks the displays 5 seconds after locking (and after each wake). With the
-  // screensaver's text available the lock screen plays it (LockView.qml), so they stay lit for
-  // screensaverBlankSeconds instead; without it, 5 seconds as before.
+  // Local change: Omarchy blanks the displays 5 seconds after locking (and after each wake). The lock
+  // screen plays the MDR screen while idle (LockView.qml), so they stay lit for screensaverBlankSeconds.
   readonly property int screensaverBlankSeconds: 600
 
   // Local change: true while runBlank has the displays off, so the lock view can pause its animation
@@ -171,8 +170,7 @@ Item {
   property bool displaysAsleep: false
 
   function armBlankTimer() {
-    screensaverFile.reload()
-    idleBlankTimer.interval = (screensaverFile.text() || "").trim().length > 0 ? screensaverBlankSeconds * 1000 : 5000
+    idleBlankTimer.interval = screensaverBlankSeconds * 1000
     idleBlankTimer.armedAt = Date.now()
     idleBlankTimer.restart()
   }
@@ -212,13 +210,6 @@ Item {
   }
 
   Process { id: pointerSetProc }
-
-  FileView {
-    id: screensaverFile
-    path: Quickshell.env("HOME") + "/.config/omarchy/branding/screensaver.txt"
-    blockLoading: true
-    printErrors: false
-  }
 
   function runWake() {
     displaysAsleep = false
