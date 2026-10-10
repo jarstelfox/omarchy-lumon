@@ -166,6 +166,10 @@ Item {
   // screensaverBlankSeconds instead; without it, 5 seconds as before.
   readonly property int screensaverBlankSeconds: 600
 
+  // Local change: true while runBlank has the displays off, so the lock view can pause its animation
+  // instead of rendering to dark screens until the next wake.
+  property bool displaysAsleep: false
+
   function armBlankTimer() {
     screensaverFile.reload()
     idleBlankTimer.interval = (screensaverFile.text() || "").trim().length > 0 ? screensaverBlankSeconds * 1000 : 5000
@@ -217,11 +221,13 @@ Item {
   }
 
   function runWake() {
+    displaysAsleep = false
     if (!wakeProcess.running) wakeProcess.running = true
     if (lockRequested) armBlankTimer()
   }
 
   function runBlank() {
+    displaysAsleep = true
     if (!blankProcess.running) blankProcess.running = true
   }
 
@@ -328,6 +334,7 @@ Item {
         failedAttempts: root.failedAttempts
         inputEnabled: root.lockRequested
         loadBackground: root.locked
+        displaysAsleep: root.displaysAsleep
         passwordText: root.enteredPassword
         onPasswordTextEdited: function(password) { root.enteredPassword = password }
         onSubmitPassword: function(password) { root.submitPassword(password) }

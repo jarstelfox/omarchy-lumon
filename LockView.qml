@@ -25,6 +25,7 @@ Item {
   property bool loadBackground: true
   property string passwordText: ""
   property bool syncingPasswordText: false
+  property bool displaysAsleep: false   // set by Service.qml while it has the displays off
 
   signal submitPassword(string password)
   signal passwordTextEdited(string password)
@@ -86,12 +87,18 @@ Item {
     }
   }
 
+  // While MDR fully covers the login, or the displays are off, nothing here is visible, so its
+  // timers, glow layer and CRT pass stop. The login stays in the scene (not visible: false), so
+  // the password field keeps focus and the first key still reaches it.
+  readonly property bool mdrCovering: mdr.visible && mdr.opacity >= 1
+  readonly property bool loginLive: root.visible && !mdrCovering && !displaysAsleep
+
   Timer {
-    interval: 33; running: root.visible; repeat: true
+    interval: 33; running: root.loginLive; repeat: true
     onTriggered: root.time += 0.033
   }
   Timer {
-    interval: 530; running: root.visible; repeat: true; triggeredOnStart: true
+    interval: 530; running: root.loginLive; repeat: true; triggeredOnStart: true
     onTriggered: { root.blink = !root.blink; root.now = Qt.formatDateTime(new Date(), "MM/dd/yyyy  hh:mm:ss") }
   }
 
@@ -99,7 +106,7 @@ Item {
     id: content
     anchors.fill: parent
     color: root.bg
-    layer.enabled: true
+    layer.enabled: root.loginLive
     layer.effect: MultiEffect {            // phosphor glow, same as the MDR screen
       shadowEnabled: true
       shadowColor: root.ink
@@ -243,11 +250,12 @@ Item {
   // CRT tube, full strength, same shader as the MDR screen
   ShaderEffect {
     anchors.fill: parent
+    visible: root.loginLive
     property real time: root.time
     property real strength: 1
     property vector2d resolution: Qt.vector2d(width, height)
     property var source: ShaderEffectSource {
-      sourceItem: content; hideSource: true; live: true
+      sourceItem: content; hideSource: true; live: root.loginLive
       textureSize: Qt.size(Math.ceil(root.width * Screen.devicePixelRatio), Math.ceil(root.height * Screen.devicePixelRatio))
     }
     fragmentShader: Qt.resolvedUrl("crt.frag.qsb")
@@ -268,7 +276,7 @@ Item {
     anchors.fill: parent
     opacity: root.screensaverMode && !root.showField ? 1 : 0
     visible: opacity > 0
-    running: visible
+    running: visible && !root.displaysAsleep
     Behavior on opacity { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
     onActivity: root.wakeRequested()
     onOutsideClicked: { root.wakeRequested(); root.reveal(); root.forcePasswordFocus() }
