@@ -304,6 +304,80 @@ Item {
     }
   }
 
+  // Local change: bind a loaded lock view (LockView.qml, or the fallback below) to this service. Only
+  // properties the view declares are set, so the fallback can stay minimal. The preview gets no input
+  // and no signals.
+  function wireLockView(view, preview) {
+    function bind(name, getter) { if (name in view) view[name] = Qt.binding(getter) }
+    bind("backgroundPath", function() { return root.backgroundPath })
+    bind("backgroundVersion", function() { return root.backgroundVersion })
+    bind("fingerprintConfigured", function() { return root.fingerprintConfigured })
+    bind("loginTimeoutSeconds", function() { return root.settings.loginTimeoutSeconds })
+    bind("idleScreen", function() { return root.settings.idleScreen })
+    bind("crt", function() { return root.settings.crtStrength })
+    bind("mdrClusters", function() { return root.settings.clusters })
+    bind("mdrFiles", function() { return root.settings.files })
+    if (preview) {
+      bind("inputEnabled", function() { return false })
+      bind("loadBackground", function() { return root.previewVisible })
+      return
+    }
+    bind("authenticatingPassword", function() { return root.authenticatingPassword })
+    bind("failureMessage", function() { return root.failureMessage })
+    bind("failedAttempts", function() { return root.failedAttempts })
+    bind("inputEnabled", function() { return root.lockRequested })
+    bind("loadBackground", function() { return root.locked })
+    bind("displaysAsleep", function() { return root.displaysAsleep })
+    bind("passwordText", function() { return root.enteredPassword })
+    view.passwordTextEdited.connect(function(password) { root.enteredPassword = password })
+    view.submitPassword.connect(function(password) { root.submitPassword(password) })
+    view.clearFailureRequested.connect(function() { root.failureMessage = "" })
+    view.wakeRequested.connect(function() { root.runWake() })
+  }
+
+  // The last-resort lock view: a plain password field with the same interface as LockView.qml.
+  // Nothing in it can fail to load.
+  Component {
+    id: fallbackLockView
+    Rectangle {
+      id: fallback
+      color: "black"
+      property string passwordText: ""
+      property bool authenticatingPassword: false
+      property string failureMessage: ""
+      property bool inputEnabled: true
+      signal submitPassword(string password)
+      signal passwordTextEdited(string password)
+      signal clearFailureRequested()
+      signal wakeRequested()
+      onPasswordTextChanged: if (fallbackInput.text !== passwordText) fallbackInput.text = passwordText
+      Text {
+        anchors.bottom: fallbackInput.top; anchors.bottomMargin: 16; anchors.horizontalCenter: parent.horizontalCenter
+        text: fallback.authenticatingPassword ? "Checking…" : (fallback.failureMessage || "Password")
+        color: "white"; font.pixelSize: 24
+      }
+      TextInput {
+        id: fallbackInput
+        anchors.centerIn: parent
+        width: 400; height: 48
+        focus: true
+        enabled: fallback.inputEnabled && !fallback.authenticatingPassword
+        echoMode: TextInput.Password
+        color: "white"; font.pixelSize: 28
+        verticalAlignment: TextInput.AlignVCenter
+        Rectangle { anchors.fill: parent; anchors.margins: -8; z: -1; color: "transparent"; border.color: "white"; border.width: 2 }
+        onTextChanged: {
+          fallback.passwordTextEdited(text)
+          fallback.wakeRequested()
+          if (text.length > 0 && fallback.failureMessage.length > 0) fallback.clearFailureRequested()
+        }
+        onAccepted: { var p = text; fallback.passwordTextEdited(""); if (p.length > 0) fallback.submitPassword(p) }
+      }
+      MouseArea { anchors.fill: parent; onClicked: { fallback.wakeRequested(); fallbackInput.forceActiveFocus() } }
+      Component.onCompleted: fallbackInput.forceActiveFocus()
+    }
+  }
+
   WlSessionLock {
     id: sessionLock
 
@@ -343,29 +417,20 @@ Item {
       id: lockSurface
       color: Color.background
 
-      LockView {
+      // Local change: the view loads through a Loader, so an error in LockView.qml (or MdrScreen.qml)
+      // can't stop this service from compiling and leave the session with no lock at all. If it fails,
+      // fallbackLockView, which lives in this file, takes over.
+      Loader {
+        id: lockViewLoader
         anchors.fill: parent
-        backgroundPath: root.backgroundPath
-        backgroundVersion: root.backgroundVersion
-        fingerprintConfigured: root.fingerprintConfigured
-        authenticatingPassword: root.authenticatingPassword
-        failureMessage: root.failureMessage
-        failedAttempts: root.failedAttempts
-        inputEnabled: root.lockRequested
-        loadBackground: root.locked
-        displaysAsleep: root.displaysAsleep
-        passwordText: root.enteredPassword
-        loginTimeoutSeconds: root.settings.loginTimeoutSeconds
-        idleScreen: root.settings.idleScreen
-        crt: root.settings.crtStrength
-        mdrClusters: root.settings.clusters
-        mdrFiles: root.settings.files
-        onPasswordTextEdited: function(password) { root.enteredPassword = password }
-        onSubmitPassword: function(password) { root.submitPassword(password) }
-        onClearFailureRequested: root.failureMessage = ""
-        onWakeRequested: root.runWake()
+        source: Qt.resolvedUrl("LockView.qml")
+        onStatusChanged: {
+          if (status !== Loader.Error) return
+          root.logEvent("lock-view-failed: using the fallback login")
+          sourceComponent = fallbackLockView
+        }
+        onLoaded: root.wireLockView(item, false)
       }
-
     }
   }
 
@@ -379,22 +444,11 @@ Item {
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
     exclusionMode: ExclusionMode.Ignore
 
-    LockView {
+    Loader {
       anchors.fill: parent
-      backgroundPath: root.backgroundPath
-      backgroundVersion: root.backgroundVersion
-      fingerprintConfigured: root.fingerprintConfigured
-      authenticatingPassword: false
-      failureMessage: ""
-      failedAttempts: 0
-      inputEnabled: false
-      loadBackground: root.previewVisible
-      passwordText: ""
-      loginTimeoutSeconds: root.settings.loginTimeoutSeconds
-      idleScreen: root.settings.idleScreen
-      crt: root.settings.crtStrength
-      mdrClusters: root.settings.clusters
-      mdrFiles: root.settings.files
+      source: Qt.resolvedUrl("LockView.qml")
+      onStatusChanged: if (status === Loader.Error) sourceComponent = fallbackLockView
+      onLoaded: root.wireLockView(item, true)
     }
 
     MouseArea {

@@ -71,8 +71,9 @@ Item {
   property bool blink: true
   property string now: ""
 
-  // MDR shows only when the idleScreen setting asks for it
-  readonly property bool screensaverMode: root.loadBackground && idleScreen === "mdr"
+  // MDR shows only when the setting asks for it and the screen actually loaded; otherwise the
+  // login stays up, as in the stock lock
+  readonly property bool screensaverMode: root.loadBackground && idleScreen === "mdr" && mdrLoader.status === Loader.Ready
   property bool revealed: false
   // typing or checking keeps the login up; a failure message alone doesn't, so idle clears it and
   // MDR comes back instead of a stale error sitting on screen until the displays blank
@@ -97,7 +98,7 @@ Item {
   // While MDR fully covers the login, or the displays are off, nothing here is visible, so its
   // timers, glow layer and CRT pass stop. The login stays in the scene (not visible: false), so
   // the password field keeps focus and the first key still reaches it.
-  readonly property bool mdrCovering: mdr.visible && mdr.opacity >= 1
+  readonly property bool mdrCovering: mdrLoader.visible && mdrLoader.opacity >= 1
   readonly property bool loginLive: root.visible && !mdrCovering && !displaysAsleep
 
   Timer {
@@ -277,18 +278,29 @@ Item {
     onPositionChanged: root.wakeRequested()
   }
 
-  // MDR covers the login while idle and fades out when someone presses a key
-  MdrScreen {
-    id: mdr
+  // after a password check the field was disabled; give it focus back so typing works without a click
+  onAuthenticatingPasswordChanged: if (!authenticatingPassword) Qt.callLater(forcePasswordFocus)
+
+  // MDR covers the login while idle and fades out when someone presses a key. It loads through a
+  // Loader so an error in MdrScreen.qml leaves the plain login instead of breaking this view.
+  Loader {
+    id: mdrLoader
     anchors.fill: parent
+    active: root.idleScreen === "mdr"
+    source: Qt.resolvedUrl("MdrScreen.qml")
     opacity: root.screensaverMode && !root.showField ? 1 : 0
     visible: opacity > 0
-    running: visible && !root.displaysAsleep
-    crt: root.crt
-    clusterCount: root.mdrClusters
     Behavior on opacity { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
-    onActivity: root.wakeRequested()
-    onOutsideClicked: { root.wakeRequested(); root.reveal(); root.forcePasswordFocus() }
-    Component.onCompleted: if (root.mdrFiles.length > 0) files = Qt.binding(() => root.mdrFiles)
+  }
+  Binding { target: mdrLoader.item; property: "running"; value: mdrLoader.visible && !root.displaysAsleep; when: mdrLoader.item !== null }
+  Binding { target: mdrLoader.item; property: "crt"; value: root.crt; when: mdrLoader.item !== null }
+  Binding { target: mdrLoader.item; property: "clusterCount"; value: root.mdrClusters; when: mdrLoader.item !== null }
+  Binding { target: mdrLoader.item; property: "files"; value: root.mdrFiles; when: mdrLoader.item !== null && root.mdrFiles.length > 0 }
+  Connections {
+    target: mdrLoader.item
+    ignoreUnknownSignals: true
+    // any pointer activity keeps the displays awake and the password field focused
+    function onActivity() { root.wakeRequested(); root.forcePasswordFocus() }
+    function onOutsideClicked() { root.wakeRequested(); root.reveal(); root.forcePasswordFocus() }
   }
 }
