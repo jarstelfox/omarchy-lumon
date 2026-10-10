@@ -4,9 +4,13 @@ The Macrodata Refinement screen from *Severance* as an interactive screensaver,
 and a Lumon terminal login as the lock screen, for
 [Omarchy](https://omarchy.org) (Hyprland, Quickshell).
 
-| Locked and idle: the MDR screen | After a key press: the login |
-|---|---|
-| ![The MDR screen](docs/idle.png) | ![The Lumon terminal login](docs/login.png) |
+![Hovering over the MDR screen and refining a cluster into a bin](docs/mdr.gif)
+
+![The lock: MDR while idle, a key press brings up the login, a failed attempt, Escape back to MDR](docs/lock.gif)
+
+| The MDR screen | The login | A failed attempt |
+|---|---|---|
+| ![The MDR screen](docs/mdr.png) | ![The Lumon terminal login](docs/login.png) | ![Authentication failed](docs/login-failed.png) |
 
 Move the pointer and the digits under it swell, like the refiners' terminals
 in the show. Three clusters of "scary" numbers hide in the grid and jitter when
