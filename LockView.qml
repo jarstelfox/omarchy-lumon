@@ -84,6 +84,14 @@ Item {
     revealed = true
     idleTimer.restart()
   }
+  // back to MDR now instead of after loginTimeoutSeconds; the field keeps focus, so the next key
+  // wakes it again
+  function dismiss() {
+    idleTimer.stop()
+    revealed = false
+    if (errorState) clearFailureRequested()
+    forcePasswordFocus()
+  }
   onKeepRevealedChanged: if (!keepRevealed) idleTimer.restart()
   Timer {
     id: idleTimer
@@ -148,7 +156,7 @@ Item {
       Item { width: 1; height: 56 * root.s }
       Text {
         anchors.horizontalCenter: parent.horizontalCenter
-        text: "Welcome to Lumon Industries Terminal System " + (root.blink ? "_" : " ")
+        text: "Welcome to Lumon Industries Terminal System " + (root.blink ? "_" : "\u2002")
         color: root.inkHot
         font.family: root.font; font.bold: true; font.pixelSize: 50 * root.s
       }
@@ -200,8 +208,16 @@ Item {
                 event.accepted = true
                 return
               }
+              // Escape clears the field and goes back to MDR; Ctrl+U only clears it
+              if (event.key === Qt.Key_Escape) {
+                root.passwordTextEdited("")
+                passwordInput.text = ""
+                root.dismiss()
+                event.accepted = true
+                return
+              }
               root.reveal()
-              if (event.key === Qt.Key_Escape || (event.modifiers & Qt.ControlModifier && event.key === Qt.Key_U)) {
+              if (event.modifiers & Qt.ControlModifier && event.key === Qt.Key_U) {
                 root.passwordTextEdited("")
                 event.accepted = true
               }
@@ -269,12 +285,17 @@ Item {
     fragmentShader: Qt.resolvedUrl("crt.frag.qsb")
   }
 
-  // clicks anywhere wake the screen and return focus to the field; the button handles its own
+  // a click outside the field and the button goes back to MDR when nothing is typed; with text in
+  // the field it only returns focus, so a stray click can't throw away a half-typed password
   MouseArea {
     anchors.fill: parent
     z: -1
     hoverEnabled: true
-    onClicked: { root.wakeRequested(); root.reveal(); root.forcePasswordFocus() }
+    onClicked: {
+      root.wakeRequested()
+      if (root.screensaverMode && !root.keepRevealed) root.dismiss()
+      else { root.reveal(); root.forcePasswordFocus() }
+    }
     onPositionChanged: root.wakeRequested()
   }
 
