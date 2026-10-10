@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
   "id": "lumon.lock",
-  "name": "My Lock Screen",
+  "name": "Lumon Lock",
   "version": "1.0.0",
-  "author": "Omarchy",
-  "description": "Quickshell session lock with separate password and fingerprint PAM flows.",
+  "author": "Jarred Stelfox",
+  "description": "A Severance-style lock screen: the interactive MDR screen while locked and idle, a Lumon terminal login behind it. Omarchy's own session lock and PAM underneath.",
   "omarchy": {
     "capabilities": [
       "authentication"
