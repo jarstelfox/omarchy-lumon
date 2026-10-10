@@ -61,13 +61,23 @@ Item {
   property real tx: -1000
   property real ty: -1000
 
+  // The idle bob is slow (about 5px/s at most), so it updates at 10fps; only digits that are
+  // jittering or swelling need the full 30fps. Each digit re-evaluates when bobTime changes,
+  // and reads time only while it's agitated, so the 30fps cost is limited to those few.
+  property real bobTime: 0
+  property int tick: 0
+
   // ponytail: fixed 30fps tick, drive from frame callbacks if motion ever looks steppy
   Timer {
     interval: 33; running: root.running && root.visible; repeat: true
     onTriggered: {
       root.time += 0.033
-      root.mx += (root.tx - root.mx) * 0.3
-      root.my += (root.ty - root.my) * 0.3
+      if (++root.tick % 3 === 0) root.bobTime = root.time
+      // ease the pointer, and settle exactly once close so a still pointer stops
+      // re-evaluating every digit's swell
+      const dx = root.tx - root.mx, dy = root.ty - root.my
+      if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) { root.mx += dx * 0.3; root.my += dy * 0.3 }
+      else if (dx !== 0 || dy !== 0) { root.mx = root.tx; root.my = root.ty }
     }
   }
 
@@ -260,8 +270,8 @@ Item {
           font.pixelSize: 26
           scale: size * (1 + 1.6 * near)
           z: near
-          x: baseX - width / 2 + 2 * Math.sin(root.time * 0.9 + phase * 2) + agitation * 7 * Math.sin(root.time * 37 + phase * 3)
-          y: baseY - height / 2 + 4 * Math.sin(root.time * 1.2 + phase) + agitation * 7 * Math.cos(root.time * 41 + phase)
+          x: baseX - width / 2 + 2 * Math.sin(root.bobTime * 0.9 + phase * 2) + (agitation > 0 ? agitation * 7 * Math.sin(root.time * 37 + phase * 3) : 0)
+          y: baseY - height / 2 + 4 * Math.sin(root.bobTime * 1.2 + phase) + (agitation > 0 ? agitation * 7 * Math.cos(root.time * 41 + phase) : 0)
         }
       }
     }
