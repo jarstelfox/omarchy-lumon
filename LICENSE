@@ -1,4 +1,8 @@
-Copyright (c) David Heinemeier Hansson
+MIT License
+
+Copyright (c) 2026 Jarred Stelfox
+Copyright (c) David Heinemeier Hansson (Omarchy: Service.qml and the original
+lock view are derived from Omarchy's lock plugin, https://github.com/basecamp/omarchy)
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the
@@ -18,3 +22,10 @@ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
 LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+---
+
+Not covered by this license: lumon.svg is the Lumon logo from the television
+series Severance, and Severance, Lumon and Macrodata Refinement are trademarks
+of their owners. They appear here for a non-commercial fan project, which is
+not affiliated with or endorsed by them. The logo will be removed on request.
