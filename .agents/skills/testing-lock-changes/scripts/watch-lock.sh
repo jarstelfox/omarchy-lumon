@@ -17,11 +17,13 @@ say() { echo "$(date +%T) $*" >> "$LOG"; }
 restore() {
   say "RESTORING the lock's QML from $GOOD: $1"
   local f stamp; stamp=$(date +%s)
-  for f in Service.qml LockView.qml MdrScreen.qml Settings.js; do
+  for f in Service.qml LockView.qml MdrScreen.qml Settings.js FingerprintModel.js; do
     [[ -f $P/$f ]] && ! git -C "$P" diff --quiet "$GOOD" -- "$f" 2>/dev/null && cp "$P/$f" "$P/$f.bak-$stamp" && say "kept your $f as $f.bak-$stamp"
   done
   git -C "$P" checkout "$GOOD" -- Service.qml LockView.qml MdrScreen.qml
-  git -C "$P" cat-file -e "$GOOD:Settings.js" 2>/dev/null && git -C "$P" checkout "$GOOD" -- Settings.js
+  for f in Settings.js FingerprintModel.js; do   # not in every older commit
+    git -C "$P" cat-file -e "$GOOD:$f" 2>/dev/null && git -C "$P" checkout "$GOOD" -- "$f"
+  done
   omarchy restart shell >> "$LOG" 2>&1
   sleep 6
   say "status after restore: $(omarchy-shell lock status 2>&1 | head -c 200)"
@@ -36,7 +38,7 @@ while (( SECONDS < end )); do
   if [[ $seen_lock == 1 && $locked == false ]]; then say "unlocked normally"; exit 0; fi
 
   bad=$(journalctl --user --since "$since" --no-pager 2>/dev/null \
-    | grep -E 'LockView\.qml|MdrScreen\.qml|Service\.qml|Settings\.js|service plugin load failed|lock-view-failed' \
+    | grep -E 'LockView\.qml|MdrScreen\.qml|Service\.qml|Settings\.js|FingerprintModel\.js|service plugin load failed|lock-view-failed' \
     | grep -iE 'is not a type|unavailable|failed to load|error loading|Cannot create|component is not ready|load failed|lock-view-failed' | tail -1)
   [[ -n $bad ]] && restore "$bad"
   # the bracket keeps this pattern from matching the command line of the check itself
