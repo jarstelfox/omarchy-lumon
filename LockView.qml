@@ -18,6 +18,7 @@ Item {
   property string backgroundPath: ""
   property int backgroundVersion: 0
   property bool fingerprintConfigured: false
+  property bool fingerprintUnavailable: false   // the shell can't reach the reader
   property bool authenticatingPassword: false
   property string failureMessage: ""
   property int failedAttempts: 0
@@ -47,6 +48,14 @@ Item {
     passwordInput.text = passwordText
     syncingPasswordText = false
   }
+  // From the stock view: waking a blanked display can stall the compositor while the monitor
+  // modesets, so the wake key's release arrives late and key repeat floods the field with that
+  // character. Only holding Backspace or Delete to clear stays useful.
+  function dropsAutoRepeat(key) { return key !== Qt.Key_Backspace && key !== Qt.Key_Delete }
+  // From the stock view: the field loses focus while a password is checked (it's disabled then).
+  function restorePasswordFocus() {
+    if (inputEnabled && passwordInput.enabled && !passwordInput.activeFocus) forcePasswordFocus()
+  }
   function submit() {
     var submitted = root.passwordText
     root.passwordTextEdited("")
@@ -55,6 +64,9 @@ Item {
 
   onPasswordTextChanged: syncPasswordText()
   onInputEnabledChanged: if (inputEnabled) Qt.callLater(forcePasswordFocus)
+  // From the stock view: a VT switch, which the NVIDIA driver forces around every suspend, takes the
+  // keyboard away and Qt drops the field's focus with it; nothing gives it back when it returns.
+  Window.onActiveFocusItemChanged: Qt.callLater(restorePasswordFocus)
   Component.onCompleted: {
     syncPasswordText()
     if (inputEnabled) Qt.callLater(forcePasswordFocus)
@@ -212,6 +224,10 @@ Item {
             onAccepted: root.submit()
             Keys.onPressed: function(event) {
               root.wakeRequested()
+              if (event.isAutoRepeat && root.dropsAutoRepeat(event.key)) {
+                event.accepted = true
+                return
+              }
               // while MDR shows, the first key only wakes it: it doesn't go into the password
               if (root.screensaverMode && !root.showField) {
                 root.reveal()
@@ -272,7 +288,8 @@ Item {
           width: field.width
           horizontalAlignment: Text.AlignHCenter
           text: root.errorState ? root.failureMessage.toUpperCase()
-              : (root.fingerprintConfigured ? "Or touch the fingerprint sensor" : "")
+              : (root.fingerprintUnavailable ? "Fingerprint reader unavailable"
+              : (root.fingerprintConfigured ? "Or touch the fingerprint sensor" : ""))
           color: root.errorState ? root.inkHot : root.ink
           opacity: root.errorState ? (root.blink ? 1 : 0.55) : 0.8
           font.family: root.font; font.bold: true; font.pixelSize: 28 * root.s; font.letterSpacing: 2 * root.s
