@@ -33,12 +33,15 @@ shows the MDR screen; a key press, or a click outside the digit grid, brings
 up the login. Password and fingerprint checking are Omarchy's own, unchanged.
 
 ```bash
-git clone https://github.com/jarstelfox/omarchy-lumon ~/.config/omarchy/plugins/lumon.lock
-omarchy plugin disable omarchy.lock
-omarchy plugin enable lumon.lock
-omarchy restart shell
-omarchy-shell lock preview      # see it without locking; a click closes it
+omarchy plugin add https://github.com/jarstelfox/omarchy-lumon --enable &&
+  omarchy restart shell &&
+  omarchy-shell lock preview    # see it without locking; a click closes it
 ```
+
+`omarchy plugin add` clones into a staging folder, checks the plugin, and
+only then enables it. Enabling `lumon.lock` turns Omarchy's own lock off in
+the same step (the plugin is a clone of `omarchy.lock`), so if the clone or
+the check fails, the stock lock stays on and you're never left without one.
 
 Then try a real lock with `omarchy system lock`.
 
@@ -125,7 +128,8 @@ usual. To go back to Omarchy's stock lock, run
 Edits don't reach the running lock until `omarchy restart shell`. Test in this
 order, cheapest first:
 
-1. `node tests/settings.test.js` for the settings parser.
+1. `node tests/settings.test.js` for the settings parser, and
+   `node tests/lock-state.test.js` for the lock decisions in `Service.qml`.
 2. `qs -n -p test-lock.qml`: the lock view with fake authentication
    (`lumon` unlocks). Never touches the real lock.
 3. `qs -n -p screensaver.qml` for the MDR screen.

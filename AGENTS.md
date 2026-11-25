@@ -27,7 +27,11 @@ Omarchy's session lock and PAM flow with a few `// Local change:` edits;
 - **`Service.qml` is security code.** Keep edits small and mark each with a
   `// Local change:` comment, so a diff against Omarchy's
   `shell/plugins/lock/Service.qml` (`/usr/share/omarchy/shell/` when installed)
-  shows what's ours after an Omarchy update.
+  shows what's ours after an Omarchy update. `FingerprintModel.js` is an
+  unchanged copy of the stock file. To catch up, three-way merge from the last
+  synced upstream: `basecamp/omarchy` branch `quattro` at `372e1dec9` (last lock
+  change `2f5ef897e`). `tests/lock-state.test.js` fails if a lock decision reads
+  the cached `locked` binding instead of `currentlyLocked()`.
 - **Keep `omarchy.clonedFrom: omarchy.lock` in the manifest.** It's the only
   way a third-party plugin gets the trusted `authentication` capability
   (`stampHostCapabilities` in Omarchy's `PluginRegistry.qml`), which keeps the
